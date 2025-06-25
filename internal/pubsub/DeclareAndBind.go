@@ -38,7 +38,7 @@ func DeclareAndBind(
 	}
 	queue, err := chConn.QueueDeclare(queueName, durable, autoDelete, exclusive, false, nil)
 	if err != nil {
-		chConn.Close()
+		_ = chConn.Close()
 		return nil, amqp.Queue{}, fmt.Errorf("error when declaring queue: %v", err)
 	}
 

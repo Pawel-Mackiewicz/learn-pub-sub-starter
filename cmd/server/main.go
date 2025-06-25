@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/qol"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -11,11 +12,7 @@ import (
 
 func main() {
 	fmt.Println("Starting Peril server...")
-	connLink := "amqp://guest:guest@localhost:5672/"
-	conn, err := amqp.Dial(connLink)
-	if err != nil {
-		log.Fatalf("Error connecting to RabbitMQ: %v", err)
-	}
+	conn := pubsub.GetConnection()
 	defer conn.Close()
 
 	fmt.Println("Connection was successful!")
@@ -26,14 +23,44 @@ func main() {
 	}
 	defer chConn.Close()
 
-	data := routing.PlayingState{
-		IsPaused: true,
+	gamelogic.PrintServerHelp()
+	for {
+		words := gamelogic.GetInput()
+		if words == nil || len(words) == 0 {
+			continue
+		}
+		if words[0] == "pause" {
+			fmt.Println("Sending 'pause' message")
+			pauseResumeGame(chConn, "pause")
+		} else if words[0] == "resume" {
+			fmt.Println("Sending 'resume' message")
+			pauseResumeGame(chConn, "resume")
+		} else if words[0] == "quit" {
+			fmt.Println("Bye!")
+			break
+		} else {
+			fmt.Println("I don't understand the command :(")
+		}
 	}
-	err = pubsub.PublishJSON(chConn, routing.ExchangePerilDirect, routing.PauseKey, data)
+	qol.WaitForSignalToKill()
+	fmt.Println("Program aborted! Connection closed.")
+}
+
+func pauseResumeGame(chConn *amqp.Channel, state string) {
+	var pause bool
+	if state == "pause" {
+		pause = true
+	} else if state == "resume" {
+		pause = false
+	} else {
+		log.Fatal("You called 'pauseResumeGame()' wrong!")
+	}
+	data := routing.PlayingState{
+		IsPaused: pause,
+	}
+	err := pubsub.PublishJSON(chConn, routing.ExchangePerilDirect, routing.PauseKey, data)
 	if err != nil {
 		fmt.Printf("Error publishing JSON: %v", err)
 	}
 
-	qol.WaitForSignalToKill()
-	fmt.Println("Program aborted! Connection closed.")
 }
