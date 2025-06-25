@@ -11,7 +11,7 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 
 	jsonBytes, err := json.Marshal(val)
 	if err != nil {
-		return fmt.Errorf("error while parsing JSON to bytes")
+		return fmt.Errorf("error while parsing JSON to bytes: %v", err)
 	}
 
 	msg := amqp.Publishing{
@@ -20,7 +20,7 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	}
 	err = ch.PublishWithContext(context.Background(), exchange, key, false, false, msg)
 	if err != nil {
-		return fmt.Errorf("error while publishing JSON")
+		return fmt.Errorf("error while publishing JSON: %v", err)
 	}
 	return nil
 }

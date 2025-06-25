@@ -14,24 +14,26 @@ func main() {
 	connLink := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(connLink)
 	if err != nil {
-		log.Fatal("Error connecting to RabbitMQ!")
+		log.Fatalf("Error connecting to RabbitMQ: %v", err)
 	}
+	defer conn.Close()
 
 	fmt.Println("Connection was successful!")
 
 	chConn, err := conn.Channel()
 	if err != nil {
-		log.Fatal("Can't open new channel")
+		log.Fatalf("Can't open new channel: %v", err)
 	}
+	defer chConn.Close()
 
 	data := routing.PlayingState{
 		IsPaused: true,
 	}
-	pubsub.PublishJSON(chConn, routing.ExchangePerilDirect, routing.PauseKey, data)
+	err = pubsub.PublishJSON(chConn, routing.ExchangePerilDirect, routing.PauseKey, data)
+	if err != nil {
+		fmt.Printf("Error publishing JSON: %v", err)
+	}
+
 	qol.WaitForSignalToKill()
-
 	fmt.Println("Program aborted! Connection closed.")
-
-	defer conn.Close()
-	defer chConn.Close()
 }

@@ -22,12 +22,11 @@ func DeclareAndBind(
 
 	chConn, err := conn.Channel()
 	if err != nil {
-		fmt.Errorf("error while creating channel: %v", err)
+		return nil, amqp.Queue{}, fmt.Errorf("error while creating channel: %v", err)
 	}
 	var durable bool
 	var autoDelete bool
 	var exclusive bool
-	noWait := false
 
 	if queueType == QueueTypeDurable {
 		durable = true
@@ -37,11 +36,13 @@ func DeclareAndBind(
 	} else {
 		return nil, amqp.Queue{}, fmt.Errorf("wrong `queueType` selected")
 	}
-	queue, err := chConn.QueueDeclare(queueName, durable, autoDelete, exclusive, noWait, nil)
+	queue, err := chConn.QueueDeclare(queueName, durable, autoDelete, exclusive, false, nil)
 	if err != nil {
+		chConn.Close()
 		return nil, amqp.Queue{}, fmt.Errorf("error when declaring queue: %v", err)
 	}
-	err = chConn.QueueBind(queueName, key, exchange, noWait, nil)
+
+	err = chConn.QueueBind(queueName, key, exchange, false, nil)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("error when binding queue: %v", err)
 	}
