@@ -16,3 +16,11 @@ func GetConnection() *amqp.Connection {
 	}
 	return conn
 }
+
+func GetChannel(connLink *amqp.Connection) *amqp.Channel {
+	chConn, err := connLink.Channel()
+	if err != nil {
+		log.Fatalf("Can't open new channel: %v", err)
+	}
+	return chConn
+}

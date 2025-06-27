@@ -7,54 +7,53 @@ import (
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/qol"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"log"
 )
 
 func main() {
 	fmt.Println("Starting Peril server...")
 	conn := pubsub.GetConnection()
+	//nolint
 	defer conn.Close()
 
 	fmt.Println("Connection was successful!")
 
-	chConn, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("Can't open new channel: %v", err)
-	}
+	chConn := pubsub.GetChannel(conn)
+	//nolint
 	defer chConn.Close()
 
 	gamelogic.PrintServerHelp()
-	for {
-		words := gamelogic.GetInput()
-		if words == nil || len(words) == 0 {
-			continue
-		}
-		if words[0] == "pause" {
-			fmt.Println("Sending 'pause' message")
-			pauseResumeGame(chConn, "pause")
-		} else if words[0] == "resume" {
-			fmt.Println("Sending 'resume' message")
-			pauseResumeGame(chConn, "resume")
-		} else if words[0] == "quit" {
-			fmt.Println("Bye!")
-			break
-		} else {
-			fmt.Println("I don't understand the command :(")
-		}
-	}
+	pauseOrResumeGame(chConn)
+
 	qol.WaitForSignalToKill()
 	fmt.Println("Program aborted! Connection closed.")
 }
 
-func pauseResumeGame(chConn *amqp.Channel, state string) {
-	var pause bool
-	if state == "pause" {
-		pause = true
-	} else if state == "resume" {
-		pause = false
-	} else {
-		log.Fatal("You called 'pauseResumeGame()' wrong!")
+func pauseOrResumeGame(chConn *amqp.Channel) {
+	for quit := false; !quit; {
+		words := gamelogic.GetInput()
+		var pause bool
+		if len(words) == 0 {
+			continue
+		}
+		switch words[0] {
+		case "pause":
+			fmt.Println("Sending 'pause' message")
+			pause = true
+		case "resume":
+			fmt.Println("Sending 'resume' message")
+			pause = false
+		case "quit":
+			fmt.Println("Bye!")
+			quit = true
+		case "help":
+			gamelogic.PrintServerHelp()
+		default:
+			fmt.Println("I don't understand this command :(")
+		}
+		publishPauseOrResume(chConn, pause)
 	}
+}
+func publishPauseOrResume(chConn *amqp.Channel, pause bool) {
 	data := routing.PlayingState{
 		IsPaused: pause,
 	}
@@ -62,5 +61,4 @@ func pauseResumeGame(chConn *amqp.Channel, state string) {
 	if err != nil {
 		fmt.Printf("Error publishing JSON: %v", err)
 	}
-
 }
