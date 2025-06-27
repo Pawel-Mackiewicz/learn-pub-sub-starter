@@ -4,9 +4,14 @@ import (
 	"fmt"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/qol"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+const (
+	logsQueueName = routing.GameLogSlug
+	logsKeyName   = "game_logs.*"
+	logsQueueType = pubsub.QueueTypeDurable
 )
 
 func main() {
@@ -17,18 +22,22 @@ func main() {
 
 	fmt.Println("Connection was successful!")
 
-	chConn := pubsub.GetChannel(conn)
+	pauseCh := pubsub.GetChannel(conn)
 	//nolint
-	defer chConn.Close()
+	defer pauseCh.Close()
 
-	gamelogic.PrintServerHelp()
-	pauseOrResumeGame(chConn)
+	_, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, logsQueueName, logsKeyName, logsQueueType)
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+	}
 
-	qol.WaitForSignalToKill()
-	fmt.Println("Program aborted! Connection closed.")
+	pauseOrResumeGame(pauseCh)
+
 }
 
 func pauseOrResumeGame(chConn *amqp.Channel) {
+	gamelogic.PrintServerHelp()
+
 	for quit := false; !quit; {
 		words := gamelogic.GetInput()
 		var pause bool
