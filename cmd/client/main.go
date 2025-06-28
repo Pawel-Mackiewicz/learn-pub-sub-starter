@@ -7,8 +7,8 @@ import (
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/qol"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
@@ -23,24 +23,73 @@ func main() {
 		log.Fatalf("Client welcome error: %v", err)
 	}
 
-	queueName := routing.PauseKey + "." + username
-	chConn, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.QueueTypeTransient)
+	gameState := gamelogic.NewGameState(username)
+
+	pauseQueueName := routing.PauseKey + "." + username
+
+	pauseChan, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilDirect,
+		pauseQueueName,
+		routing.PauseKey,
+		pubsub.QueueTypeTransient)
 	if err != nil {
 		log.Fatalf("Failed to declare and bind queue: %v", err)
 	}
-
-	gameState := gamelogic.NewGameState(username)
-	playGame(gameState)
-
 	//nolint
-	defer chConn.Close()
+	defer pauseChan.Close()
 
-	qol.WaitForSignalToKill()
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		pauseQueueName,
+		routing.PauseKey,
+		pubsub.QueueTypeTransient,
+		handlerPause(gameState))
 
-	fmt.Println("Program aborted! Connection closed.")
+	if err != nil {
+		log.Fatalf("Failed to subscribe to queue: %v", err)
+	}
+
+	armyMovesQueueName := "army_moves" + "." + username
+	armyMovesRoutingKey := "army_moves.*"
+	armyMovesChannel, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		armyMovesQueueName,
+		armyMovesRoutingKey,
+		pubsub.QueueTypeTransient)
+	if err != nil {
+		log.Fatalf("Failed to declare and bind '%v' queue: %v", armyMovesQueueName, err)
+	}
+	err = pubsub.SubscribeJSON(
+		conn,
+		string(routing.ExchangePerilTopic),
+		armyMovesQueueName,
+		armyMovesRoutingKey,
+		pubsub.QueueTypeTransient,
+		handlerArmyMoves(gameState))
+	if err != nil {
+		log.Fatalf("Failed to subscribe to '%v' queue: %v", armyMovesQueueName, err)
+	}
+	playGame(gameState, username, armyMovesChannel)
 }
 
-func playGame(gameState *gamelogic.GameState) {
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(ps)
+	}
+}
+
+func handlerArmyMoves(gs *gamelogic.GameState) func(gamelogic.ArmyMove) {
+	return func(am gamelogic.ArmyMove) {
+		defer fmt.Print(">")
+		gs.HandleMove(am)
+	}
+}
+
+func playGame(gameState *gamelogic.GameState, username string, armyMovesChannel *amqp091.Channel) {
 	for isOver := false; !isOver; {
 		input := gamelogic.GetInput()
 		if len(input) == 0 {
@@ -55,10 +104,15 @@ func playGame(gameState *gamelogic.GameState) {
 			}
 		//move <destination> <unit-id>
 		case "move":
-			_, err := gameState.CommandMove(input)
+			armyMove, err := gameState.CommandMove(input)
 			if err != nil {
 				fmt.Println(err)
 			}
+			err = pubsub.PublishJSON(armyMovesChannel, routing.ExchangePerilTopic, "army_moves."+username, armyMove)
+			if err != nil {
+				fmt.Printf("Error during moving army occured: %v", err)
+			}
+			fmt.Println("Your move was published!")
 		case "status":
 			gameState.CommandStatus()
 		case "help":
