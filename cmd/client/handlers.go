@@ -50,15 +50,26 @@ func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckTyp
 func handleWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub.AckType {
 	return func(rw gamelogic.RecognitionOfWar) pubsub.AckType {
 		defer fmt.Print("> ")
-		warOutcome, _, _ := gs.HandleWar(rw)
+		var logMsg string
+		warOutcome, winner, loser := gs.HandleWar(rw)
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeOpponentWon:
-			return pubsub.Ack
+			fallthrough
 		case gamelogic.WarOutcomeYouWon:
-			return pubsub.Ack
+			logMsg = fmt.Sprintf("%v won a war against %v", winner, loser)
+			fallthrough
 		case gamelogic.WarOutcomeDraw:
+			if logMsg == "" {
+				logMsg = fmt.Sprintf("A war between %v and %v resulted in a draw", winner, loser)
+			}
+			key := routing.GameLogSlug + "." + rw.Attacker.Username
+			err := pubsub.PublishGob(routing.ExchangePerilTopic, key, logMsg)
+			if err != nil {
+				fmt.Printf("error during publishing logs: %v", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		default:
 			fmt.Println("Unexpected War Outcome")
