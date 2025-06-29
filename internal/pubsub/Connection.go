@@ -17,12 +17,13 @@ func GetConnection() *amqp.Connection {
 	if connInstance != nil {
 		return connInstance
 	}
-	conn, err := amqp.Dial(connLink)
+	var err error
+	connInstance, err = amqp.Dial(connLink)
 	if err != nil {
 		log.Fatalf("error connecting to RabbitMQ: %v", err)
 	}
 	fmt.Println("Connection was successful!")
-	return conn
+	return connInstance
 }
 
 func GetChannel() *amqp.Channel {
@@ -30,6 +31,6 @@ func GetChannel() *amqp.Channel {
 	if err != nil {
 		log.Fatalf("Can't open new channel: %v", err)
 	}
-	fmt.Println("Channel opened successfully!")
+	fmt.Println("New channel openned")
 	return chConn
 }

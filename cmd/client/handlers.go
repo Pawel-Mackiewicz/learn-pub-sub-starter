@@ -23,8 +23,10 @@ func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckTyp
 		switch moveOutcome {
 		case gamelogic.MoveOutcomeSamePlayer:
 			return pubsub.NackDiscard
+
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
+
 		case gamelogic.MoveOutcomeMakeWar:
 			makeWarCh := pubsub.GetChannel()
 			rw := gamelogic.RecognitionOfWar{
@@ -35,8 +37,10 @@ func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckTyp
 			err := pubsub.PublishJSON(makeWarCh, routing.ExchangePerilTopic, warKey, rw)
 			if err != nil {
 				fmt.Printf("Error during Publishing War!: %v", err)
+				fmt.Println("Re-doing!")
+				return pubsub.NackRequeue
 			}
-			return pubsub.NackRequeue
+			return pubsub.Ack
 		}
 		fmt.Println("error: unknown move outcome")
 		return pubsub.NackDiscard

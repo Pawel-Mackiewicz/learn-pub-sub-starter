@@ -8,7 +8,6 @@ import (
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
-	"github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
@@ -25,19 +24,6 @@ func main() {
 	gameState := gamelogic.NewGameState(username)
 
 	pauseQueueName := routing.PauseKey + "." + username
-
-	pauseChan, _, err := pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilDirect,
-		pauseQueueName,
-		routing.PauseKey,
-		pubsub.QueueTypeTransient)
-	if err != nil {
-		log.Fatalf("Failed to declare and bind queue: %v", err)
-	}
-	//nolint
-	defer pauseChan.Close()
-
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -51,15 +37,6 @@ func main() {
 
 	armyMovesQueueName := "army_moves" + "." + username
 	armyMovesRoutingKey := "army_moves.*"
-	armyMovesChannel, _, err := pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilTopic,
-		armyMovesQueueName,
-		armyMovesRoutingKey,
-		pubsub.QueueTypeTransient)
-	if err != nil {
-		log.Fatalf("Failed to declare and bind '%v' queue: %v", armyMovesQueueName, err)
-	}
 	err = pubsub.SubscribeJSON(
 		conn,
 		string(routing.ExchangePerilTopic),
@@ -83,10 +60,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to subscribe to '%v' queue: %v", warQueueName, err)
 	}
-	playGame(gameState, username, armyMovesChannel)
+	playGame(gameState, username)
 }
 
-func playGame(gameState *gamelogic.GameState, username string, armyMovesChannel *amqp091.Channel) {
+func playGame(gameState *gamelogic.GameState, username string) {
 	for isOver := false; !isOver; {
 		input := gamelogic.GetInput()
 		if len(input) == 0 {
@@ -101,6 +78,7 @@ func playGame(gameState *gamelogic.GameState, username string, armyMovesChannel 
 			}
 		// move <destination> <unit-id>
 		case "move":
+			armyMovesChannel := pubsub.GetChannel()
 			armyMove, err := gameState.CommandMove(input)
 			if err != nil {
 				fmt.Println(err)
