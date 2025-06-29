@@ -28,15 +28,20 @@ func DeclareAndBind(
 	var autoDelete bool
 	var exclusive bool
 
-	if queueType == QueueTypeDurable {
+	switch queueType {
+	case QueueTypeDurable:
 		durable = true
-	} else if queueType == QueueTypeTransient {
+	case QueueTypeTransient:
 		autoDelete = true
 		exclusive = true
-	} else {
+	default:
 		return nil, amqp.Queue{}, fmt.Errorf("wrong `queueType` selected")
 	}
-	queue, err := chConn.QueueDeclare(queueName, durable, autoDelete, exclusive, false, nil)
+
+	table := amqp.Table{
+		"x-dead-letter-exchange": "peril_dlx",
+	}
+	queue, err := chConn.QueueDeclare(queueName, durable, autoDelete, exclusive, false, table)
 	if err != nil {
 		_ = chConn.Close()
 		return nil, amqp.Queue{}, fmt.Errorf("error when declaring queue: %v", err)
