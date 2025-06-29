@@ -1,6 +1,8 @@
+// Package pubsub is for publishing and subscribing to RabbitMQ
 package pubsub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -14,6 +16,23 @@ const (
 	NackDiscard
 	NackRequeue
 )
+
+func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
+	jsonBytes, err := json.Marshal(val)
+	if err != nil {
+		return fmt.Errorf("error while parsing JSON to bytes: %v", err)
+	}
+
+	msg := amqp.Publishing{
+		ContentType: "application/json",
+		Body:        jsonBytes,
+	}
+	err = ch.PublishWithContext(context.Background(), exchange, key, false, false, msg)
+	if err != nil {
+		return fmt.Errorf("error while publishing JSON: %v", err)
+	}
+	return nil
+}
 
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
@@ -33,7 +52,7 @@ func SubscribeJSON[T any](
 		return err
 	}
 
-	//handle deliveries
+	// handle deliveries
 	go func() {
 		for msg := range deliveries {
 			var body T
