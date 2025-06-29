@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	fmt.Println("Starting Peril client...")
 	conn := pubsub.GetConnection()
 	//nolint
@@ -46,7 +45,6 @@ func main() {
 		routing.PauseKey,
 		pubsub.QueueTypeTransient,
 		handlerPause(gameState))
-
 	if err != nil {
 		log.Fatalf("Failed to subscribe to queue: %v", err)
 	}
@@ -93,7 +91,17 @@ func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckTyp
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
 		case gamelogic.MoveOutcomeMakeWar:
-			return pubsub.Ack
+			makeWarCh := pubsub.GetChannel()
+			rw := gamelogic.RecognitionOfWar{
+				Attacker: move.Player,
+				Defender: gs.Player,
+			}
+			warKey := routing.WarRecognitionsPrefix + "." + gs.GetUsername()
+			err := pubsub.PublishJSON(makeWarCh, routing.ExchangePerilTopic, warKey, rw)
+			if err != nil {
+				fmt.Printf("Error during Publishing War!: %v", err)
+			}
+			return pubsub.NackRequeue
 		}
 		fmt.Println("error: unknown move outcome")
 		return pubsub.NackDiscard
@@ -107,13 +115,13 @@ func playGame(gameState *gamelogic.GameState, username string, armyMovesChannel 
 			continue
 		}
 		switch strings.TrimSpace(strings.ToLower(input[0])) {
-		//spawn <location> <rank>
+		// spawn <location> <rank>
 		case "spawn":
 			err := gameState.CommandSpawn(input)
 			if err != nil {
 				fmt.Println(err)
 			}
-		//move <destination> <unit-id>
+		// move <destination> <unit-id>
 		case "move":
 			armyMove, err := gameState.CommandMove(input)
 			if err != nil {

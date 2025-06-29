@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -22,7 +23,7 @@ func main() {
 
 	fmt.Println("Connection was successful!")
 
-	pauseCh := pubsub.GetChannel(conn)
+	pauseCh := pubsub.GetChannel()
 	//nolint
 	defer pauseCh.Close()
 
@@ -32,7 +33,6 @@ func main() {
 	}
 
 	pauseOrResumeGame(pauseCh)
-
 }
 
 func pauseOrResumeGame(chConn *amqp.Channel) {
@@ -62,6 +62,7 @@ func pauseOrResumeGame(chConn *amqp.Channel) {
 		publishPauseOrResume(chConn, pause)
 	}
 }
+
 func publishPauseOrResume(chConn *amqp.Channel, pause bool) {
 	data := routing.PlayingState{
 		IsPaused: pause,
